@@ -2,69 +2,38 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Button,
   Card,
-  Col,
   Flex,
   Modal,
   Row,
   Space,
   Upload,
   Image,
-  Tag,
   Typography,
   Input,
   Select,
   Table,
-  message,
-  Form,
-  Divider,
+  Col,
+  Tag,
 } from "antd";
 import {
   CloseOutlined,
-  LoadingOutlined,
   UploadOutlined,
-  PlusOutlined,
-  CheckCircleOutlined,
   RightOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons";
 import * as XLSX from "xlsx";
-import { useToast } from "../hooks/useToastMessage";
+import { useTranslation } from "react-i18next";
 
 const { Dragger } = Upload;
 const { Text } = Typography;
 
 const ExcelImportModal = ({
-  open,
-  setOpen,
-  requiredFields,
-  customFields,
-  loadGroups,
-  createGroup,
-  onImport,
-  formatContactData,
-  getData,
-  labels = {
-    importTitle: "Import Excel",
-    uploadFile: "Upload Excel File",
-    uploading: "Uploading...",
-    selectSheet: "Select Sheet",
-    columnsTypes: "Column Mapping",
-    importedColumns: "Imported Columns",
-    groups: "Groups",
-    addGroup: "Add Group",
-    selectGroups: "Select Groups",
-    next: "Next",
-    back: "Back",
-    cancel: "Cancel",
-    import: "Import",
-    saveContacts: "Save Contacts",
-    upload: "Upload",
-    sheets: "Sheets",
-    columns: "Columns",
-    noContactsToImport: "No contacts to import",
-    requiredFieldMissing: (field) => `Please map required field: ${field}`,
-  },
+  isOpen,
+  onClose,
+  onSubmit,
+  fields = [],
+  customFields = [],
 }) => {
-  const [isUploading, setIsUploading] = useState(false);
   const [excelFileName, setExcelFileName] = useState("");
   const [sheetNames, setSheetNames] = useState([]);
   const [currentSheetName, setCurrentSheetName] = useState("");
@@ -74,19 +43,11 @@ const ExcelImportModal = ({
   const [columnMappings, setColumnMappings] = useState({});
   const [convertedData, setConvertedData] = useState([]);
 
-  const [groups, setGroups] = useState([]);
-  const [selectedGroups, setSelectedGroups] = useState([]);
-  const [newGroupName, setNewGroupName] = useState("");
-  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [step, setStep] = useState(1);
   const [btnLoading, setBtnLoading] = useState(false);
 
-  const [step, setStep] = useState(1);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const { t } = useTranslation();
 
-  const { showSuccess, showError, showWarning } = useToast();
-
-  const [form] = Form.useForm();
   const handleFileUpload = (file) => {
     const reader = new FileReader();
 
@@ -95,10 +56,10 @@ const ExcelImportModal = ({
       setWorkbook(wb);
       setSheetNames(wb.SheetNames);
 
-      const sheetName = wb.SheetNames[0];
-      setCurrentSheetName(sheetName);
+      const firstSheet = wb.SheetNames[0];
+      setCurrentSheetName(firstSheet);
 
-      const sheet = wb.Sheets[sheetName];
+      const sheet = wb.Sheets[firstSheet];
       const json = XLSX.utils.sheet_to_json(sheet);
       setExcelData(json);
     };
@@ -108,25 +69,6 @@ const ExcelImportModal = ({
     return false;
   };
 
-  if (open) {
-    if (typeof setOpen !== "function")
-      throw new Error("Prop 'setOpen' is required and must be a function");
-    if (!Array.isArray(requiredFields))
-      throw new Error("Prop 'requiredFields' must be an array");
-    if (!Array.isArray(customFields))
-      throw new Error("Prop 'customFields' must be an array");
-    if (typeof loadGroups !== "function")
-      throw new Error("Prop 'loadGroups' is required and must be a function");
-    if (typeof createGroup !== "function")
-      throw new Error("Prop 'createGroup' is required and must be a function");
-    if (typeof onImport !== "function")
-      throw new Error("Prop 'onImport' is required and must be a function");
-    if (typeof formatContactData !== "function")
-      throw new Error("Prop 'formatContactData' must be a function");
-    if (typeof getData !== "function")
-      throw new Error("Prop 'getData' must be a function");
-  }
-
   const resetAll = () => {
     setExcelFileName("");
     setSheetNames([]);
@@ -134,27 +76,139 @@ const ExcelImportModal = ({
     setWorkbook(null);
     setColumnMappings({});
     setConvertedData([]);
-    setSelectedGroups([]);
     setStep(1);
   };
 
   const handleSheetChange = (index) => {
     const name = sheetNames[index];
     setCurrentSheetName(name);
+
     const sheet = workbook.Sheets[name];
     const json = XLSX.utils.sheet_to_json(sheet);
+
     setExcelData(json);
     setColumnMappings({});
     setConvertedData([]);
   };
 
-  const availableOptions = () => {
-    const used = new Set(Object.keys(columnMappings));
-    return [
-      ...requiredFields,
-      ...customFields.map((field) => field.name),
-    ].filter((field) => !used.has(field));
+  const generateConvertedData = useCallback(() => {
+    if (!excelData?.length) return;
+
+    const formatted = excelData.map((row, i) => {
+      const obj = { id: i + 1 };
+
+      Object.keys(columnMappings).forEach((fieldKey) => {
+        const excelColumn = columnMappings[fieldKey];
+        obj[fieldKey] = row[excelColumn];
+      });
+
+      return obj;
+    });
+
+    setConvertedData(formatted);
+  }, [excelData, columnMappings]);
+
+  useEffect(() => {
+    if (Object.keys(columnMappings)?.length) generateConvertedData();
+  }, [columnMappings]);
+
+  const allFields = [
+    ...(fields?.map((f) => ({
+      label: f?.label,
+      key: f?.key,
+      alternateMatches: f?.alternateMatches || [],
+    })) || []),
+    ...(customFields?.map((c) => ({
+      label: c?.label,
+      key: c?.id,
+      alternateMatches: c?.alternateMatches || [],
+    })) || []),
+  ];
+
+  useEffect(() => {
+    if (!excelData?.length || !allFields?.length) return;
+
+    const excelColumns = Object.keys(excelData[0]);
+    const initialMapping = {};
+
+    allFields.forEach((field) => {
+      const match = excelColumns.find((col) => {
+        const clean = (v) => String(v).toLowerCase().trim();
+        if (clean(col) === clean(field.label)) return true;
+        return field.alternateMatches?.some((alt) => clean(col) === clean(alt));
+      });
+
+      if (match) initialMapping[field.key] = match;
+    });
+
+    if (
+      Object.keys(initialMapping).length &&
+      !Object.keys(columnMappings).length
+    ) {
+      setColumnMappings(initialMapping);
+    }
+  }, [excelData, allFields]);
+
+  useEffect(() => {
+    if (!excelData?.length || !Object.keys(columnMappings).length) return;
+
+    const formatted = excelData.map((row, i) => {
+      const obj = { id: i + 1 };
+      Object.keys(columnMappings).forEach((fieldKey) => {
+        const excelColumn = columnMappings[fieldKey];
+        obj[fieldKey] = row[excelColumn];
+      });
+      return obj;
+    });
+
+    setConvertedData(formatted);
+  }, [excelData, columnMappings]);
+
+  const handleSubmit = async () => {
+    setBtnLoading(true);
+    try {
+      if (step === 1) {
+        setStep(2);
+        return;
+      }
+
+      await onSubmit(convertedData);
+
+      resetAll();
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBtnLoading(false);
+    }
   };
+
+  const modalFooter = [
+    <Button key="1" onClick={() => (step === 1 ? onClose() : setStep(1))}>
+      {step === 1
+        ? t("cancel") !== "cancel"
+          ? t("cancel")
+          : "Cancel"
+        : t("back") !== "back"
+        ? t("back")
+        : "Back"}
+    </Button>,
+    <Button
+      key="2"
+      type="primary"
+      disabled={!excelFileName}
+      loading={btnLoading}
+      onClick={handleSubmit}
+    >
+      {step === 1
+        ? t("next") !== "next"
+          ? t("next")
+          : "Next"
+        : t("import") !== "import"
+        ? t("import")
+        : "Import"}
+    </Button>,
+  ];
 
   const handleColumnChange = (excelColumn, selectedField) => {
     setColumnMappings((prev) => {
@@ -170,143 +224,18 @@ const ExcelImportModal = ({
     });
   };
 
-  const generateConvertedData = useCallback(() => {
-    if (excelData.length === 0) return;
-
-    const formatted = excelData.map((row, index) => {
-      const obj = { id: index + 1 };
-
-      requiredFields.forEach((f) => {
-        obj[f] = row[columnMappings[f]];
-      });
-
-      customFields.forEach((f) => {
-        obj[f?._id] = row[columnMappings[f?.name]];
-      });
-
-      return obj;
-    });
-
-    setConvertedData(formatted);
-  }, [excelData, columnMappings]);
-
-  useEffect(() => {
-    if (Object.keys(columnMappings).length) generateConvertedData();
-  }, [columnMappings]);
-
-  const validateMapping = () => {
-    for (const field of requiredFields) {
-      if (!columnMappings[field]) {
-        showWarning(labels.requiredFieldMissing(field));
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const loadAllGroups = async () => {
-    if (typeof loadGroups === "function") {
-      const data = await loadGroups();
-      setGroups(data || []);
-    }
-  };
-
-  useEffect(() => {
-    if (open) loadAllGroups();
-  }, [open]);
-
-  const handleAddGroup = async () => {
-    if (!newGroupName.trim()) return;
-
-    try {
-      setCreatingGroup(true);
-      const newGroup = await createGroup(newGroupName.trim());
-      loadAllGroups();
-      setNewGroupName("");
-    } catch (e) {
-      message.error(e.message);
-    } finally {
-      setCreatingGroup(false);
-    }
-  };
-
-  const handleSubmit = async () => {
-    try {
-      setBtnLoading(true);
-
-      if (step === 1) {
-        if (!validateMapping()) return;
-        setStep(2);
-        return;
-      }
-
-      if (step === 2) {
-        if (convertedData.length === 0) {
-          message.error(labels.noContactsToImport);
-          return;
-        }
-
-        const formatted = await Promise.all(
-          convertedData.map((row) => formatContactData(row, selectedGroups))
-        );
-
-        const data = await onImport(formatted);
-
-        if (data?.status) {
-          showSuccess(data?.message);
-          setOpen(false);
-          resetAll();
-          getData();
-        } else {
-          showError(data?.message);
-        }
-      }
-    } catch (error) {
-      console.log(error);
-      showError(error.message);
-    } finally {
-      setBtnLoading(false);
-    }
-  };
-
-  const tableColumns = [
-    {
-      title: "SN",
-      render: (_, __, idx) => (page - 1) * pageSize + (idx + 1),
-    },
-    ...requiredFields.map((f) => ({
-      title: f,
-      dataIndex: f,
-    })),
-    ...customFields.map((f) => ({
-      title: f.label,
-      dataIndex: f.id,
-    })),
-  ];
-
-  const modalFooter = [
-    <Button key="1" onClick={() => (step === 1 ? setOpen(false) : setStep(1))}>
-      {step === 1 ? labels.cancel : labels.back}
-    </Button>,
-    <Button
-      disabled={!excelFileName ? true : false || btnLoading}
-      key="2"
-      onClick={handleSubmit}
-      type="primary"
-      loading={btnLoading}
-    >
-      {step === 1 ? labels.next : labels.import}
-    </Button>,
-  ];
-
   return (
     <Modal
-      open={open}
+      open={isOpen}
       width={800}
-      title={labels.importTitle}
+      title={
+        t("import.excel") !== "import.excel"
+          ? t("import.excel")
+          : "Import Excel"
+      }
       onCancel={() => {
         resetAll();
-        setOpen(false);
+        onClose();
       }}
       footer={modalFooter}
     >
@@ -320,8 +249,9 @@ const ExcelImportModal = ({
           shape="round"
           size={"middle"}
           icon={<CheckCircleOutlined />}
+          disabled={step === 2}
         >
-          {labels.upload}
+          {t("upload") !== "upload" ? t("upload") : "Upload"}
         </Button>
         <RightOutlined />
         <Button
@@ -331,13 +261,13 @@ const ExcelImportModal = ({
           icon={<CheckCircleOutlined />}
           disabled={!excelFileName}
         >
-          {labels.saveContacts}
+          {t("preview") !== "preview" ? t("preview") : "Preview"}
         </Button>
       </Row>
 
       {step === 1 && (
         <>
-          {!excelFileName && (
+          {!excelFileName ? (
             <Dragger
               beforeUpload={handleFileUpload}
               showUploadList={false}
@@ -347,26 +277,19 @@ const ExcelImportModal = ({
               accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
             >
               <Card style={{ height: "150px" }}>
-                {isUploading ? (
-                  <div>
-                    <p className="ant-upload-drag-icon">
-                      <LoadingOutlined />
-                    </p>
-                    <p className="ant-upload-text"> {labels.uploading} </p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="ant-upload-drag-icon">
-                      <UploadOutlined />
-                    </p>
-                    <p className="ant-upload-text">{labels.uploadFile}</p>
-                  </div>
-                )}
+                <div>
+                  <p className="ant-upload-drag-icon">
+                    <UploadOutlined />
+                  </p>
+                  <p className="ant-upload-text">
+                    {t("upload.file") !== "upload.file"
+                      ? t("upload.file")
+                      : "Upload File"}
+                  </p>
+                </div>
               </Card>
             </Dragger>
-          )}
-
-          {excelFileName && (
+          ) : (
             <>
               <Card>
                 <Flex justify="space-between">
@@ -380,7 +303,8 @@ const ExcelImportModal = ({
                         {excelFileName}
                       </Text>
                       <Tag style={{ fontSize: "11px" }}>
-                        {sheetNames?.length} {"sheets"}
+                        {sheetNames?.length}{" "}
+                        {t("sheets") !== "sheets" ? t("sheets") : "sheets"}
                       </Tag>
                     </div>
                   </Space>
@@ -388,7 +312,10 @@ const ExcelImportModal = ({
                   <Select
                     value={currentSheetName}
                     style={{ width: 200 }}
-                    options={sheetNames.map((n, i) => ({ label: n, value: i }))}
+                    options={sheetNames?.map((n, i) => ({
+                      label: n,
+                      value: i,
+                    }))}
                     onChange={handleSheetChange}
                   />
                 </Flex>
@@ -396,109 +323,96 @@ const ExcelImportModal = ({
                 <Button
                   type="primary"
                   danger
-                  icon={<CloseOutlined />}
                   size="small"
+                  icon={<CloseOutlined />}
                   style={{ position: "absolute", right: 10, top: 10 }}
                   onClick={resetAll}
                 />
               </Card>
 
-              <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
-                <Col span={12}>
-                  <Text strong>
-                    {labels.importedColumns}
-                    <Tag>
-                      {Object.keys(excelData[0] || {}).length} {labels.columns}
-                    </Tag>
-                  </Text>
-                </Col>
-
-                <Col span={12}>
-                  <Text strong>{labels.columnsTypes}</Text>
-                </Col>
-              </Row>
-
-              <div style={{ maxHeight: 250, overflow: "auto", marginTop: 10 }}>
-                {(excelData[0] ? Object.keys(excelData[0]) : []).map((col) => (
-                  <Row key={col} style={{ marginBottom: 10 }}>
-                    <Space.Compact style={{ width: "100%" }}>
-                      <Input readOnly value={col} />
-                      <Select
-                        allowClear
-                        placeholder="Select Field"
-                        style={{ width: "100%" }}
-                        value={Object.keys(columnMappings).find(
-                          (f) => columnMappings[f] === col
-                        )}
-                        onChange={(value) => handleColumnChange(col, value)}
-                        options={availableOptions().map((f) => ({
-                          label: f,
-                          value: f,
-                        }))}
-                      />
-                    </Space.Compact>
+              {excelData?.length > 0 && (
+                <>
+                  <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
+                    <Col span={12}>
+                      <Text strong>
+                        {t("imported.columns") !== "imported.columns"
+                          ? t("imported.columns")
+                          : "Imported Columns"}
+                        <Tag>
+                          {Object.keys(excelData[0] || {})?.length}{" "}
+                          {t("columns") !== "columns"
+                            ? t("columns")
+                            : "Columns"}
+                        </Tag>
+                      </Text>
+                    </Col>
+                    <Col span={12}>
+                      <Text strong>
+                        {t("column.mapping") !== "column.mapping"
+                          ? t("column.mapping")
+                          : "Column Mapping"}
+                      </Text>
+                    </Col>
                   </Row>
-                ))}
-              </div>
+
+                  <div
+                    style={{ maxHeight: 250, overflow: "auto", marginTop: 10 }}
+                  >
+                    {Object.keys(excelData[0]).map((col) => (
+                      <Row key={col} style={{ marginBottom: 10 }}>
+                        <Space.Compact style={{ width: "100%" }}>
+                          <Input readOnly value={col} />
+                          <Select
+                            allowClear
+                            style={{ width: "100%" }}
+                            placeholder={
+                              t("select.field") !== "select.field"
+                                ? t("select.field")
+                                : "Select Field"
+                            }
+                            value={Object.keys(columnMappings)?.find(
+                              (f) => columnMappings[f] === col
+                            )}
+                            onChange={(value) => handleColumnChange(col, value)}
+                            options={allFields
+                              ?.filter((f) => {
+                                const selected = Object.keys(
+                                  columnMappings
+                                ).find((key) => columnMappings[key] === col);
+                                return (
+                                  f.key === selected ||
+                                  !Object.keys(columnMappings).includes(f.key)
+                                );
+                              })
+                              ?.map((f) => ({
+                                label: f.label,
+                                value: f.key,
+                              }))}
+                          />
+                        </Space.Compact>
+                      </Row>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
         </>
       )}
 
       {step === 2 && (
-        <>
-          <Form layout="vertical" form={form}>
-            <Form.Item label={labels.groups}>
-              <Select
-                mode="multiple"
-                value={selectedGroups}
-                onChange={setSelectedGroups}
-                placeholder={labels.selectGroups}
-                options={groups?.map((g) => ({
-                  label: g?.name,
-                  value: g?._id,
-                }))}
-                popupRender={(menu) => (
-                  <>
-                    {menu}
-                    <Divider />
-                    <Space.Compact style={{ width: "100%" }}>
-                      <Input
-                        placeholder="Enter group name"
-                        value={newGroupName}
-                        onChange={(e) => setNewGroupName(e.target.value)}
-                      />
-                      <Button
-                        type="primary"
-                        loading={creatingGroup}
-                        icon={<PlusOutlined />}
-                        onClick={handleAddGroup}
-                      >
-                        {labels.addGroup}
-                      </Button>
-                    </Space.Compact>
-                  </>
-                )}
-              />
-            </Form.Item>
-          </Form>
-
-          <Table
-            rowKey="id"
-            columns={tableColumns}
-            dataSource={convertedData}
-            pagination={{
-              current: page,
-              pageSize,
-              total: convertedData.length,
-              showSizeChanger: true,
-              onChange: (p, ps) => {
-                setPage(p);
-                setPageSize(ps);
-              },
-            }}
-          />
-        </>
+        <Table
+          rowKey="id"
+          scroll={{ y: 400 }}
+          dataSource={convertedData}
+          columns={[
+            { title: "Sr. No.", dataIndex: "id", width: 80 },
+            ...Object.keys(columnMappings).map((fieldKey) => {
+              const field = allFields.find((f) => f?.key === fieldKey);
+              return { title: field?.label || fieldKey, dataIndex: fieldKey };
+            }),
+          ]}
+        />
       )}
     </Modal>
   );
