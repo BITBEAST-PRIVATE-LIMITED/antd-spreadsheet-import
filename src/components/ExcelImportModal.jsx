@@ -22,6 +22,8 @@ import {
   RightOutlined,
   CheckCircleOutlined,
   FileExcelOutlined,
+  LoadingOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import * as XLSX from "xlsx";
 
@@ -48,30 +50,39 @@ const ExcelImportModal = ({
   const [convertedData, setConvertedData] = useState([]);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [mappingError, setMappingError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const [step, setStep] = useState(1);
   const [btnLoading, setBtnLoading] = useState(false);
 
   const handleFileUpload = (file) => {
+    setLoading(true);
+
     const reader = new FileReader();
-
     reader.onload = (e) => {
-      const wb = XLSX.read(e.target.result, { type: "binary" });
-      setWorkbook(wb);
-      setSheetNames(wb.SheetNames);
+      try {
+        const wb = XLSX.read(e.target.result, { type: "binary" });
+        setWorkbook(wb);
+        setSheetNames(wb.SheetNames);
 
-      const firstSheet = wb.SheetNames[0];
-      setCurrentSheetName(firstSheet);
+        const firstSheet = wb.SheetNames[0];
+        setCurrentSheetName(firstSheet);
 
-      const sheet = wb.Sheets[firstSheet];
-      const json = XLSX.utils.sheet_to_json(sheet);
-      setExcelData(json);
+        const sheet = wb.Sheets[firstSheet];
+        const json = XLSX.utils.sheet_to_json(sheet);
+        setExcelData(json);
+      } catch (error) {
+        console.error(error);
+        setExcelData([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
     reader.readAsBinaryString(file);
     setExcelFileName(file.name);
     setHasUserInteracted(false);
-    return false;
+    return false; // Prevent auto-upload
   };
 
   const resetAll = () => {
@@ -158,7 +169,14 @@ const ExcelImportModal = ({
     setBtnLoading(true);
     try {
       if (step === 1) {
-        if (!Object.keys(columnMappings).length) {
+        const requiredFields = fields.filter((f) =>
+          f.validations?.some((v) => v?.rule === "required")
+        );
+        const missingFields = requiredFields.filter(
+          (f) => !columnMappings[f.key]
+        );
+
+        if (missingFields?.length > 0) {
           setMappingError(true);
           setBtnLoading(false);
           return;
@@ -208,6 +226,15 @@ const ExcelImportModal = ({
   const handleColumnChange = (excelColumn, selectedField) => {
     setHasUserInteracted(true);
 
+    const requiredFields = fields.filter((f) =>
+      f.validations?.some((v) => v?.rule === "required")
+    );
+    const missingFields = requiredFields.filter((f) => !columnMappings[f.key]);
+
+    if (missingFields?.length === 1) {
+      setMappingError(false);
+    }
+
     setColumnMappings((prev) => {
       const next = { ...prev };
 
@@ -245,6 +272,7 @@ const ExcelImportModal = ({
           size={"middle"}
           icon={<CheckCircleOutlined />}
           disabled={step === 2}
+          style={{ cursor: "not-allowed" }}
         >
           {translations?.tab?.upload ?? "Upload"}
         </Button>
@@ -255,6 +283,7 @@ const ExcelImportModal = ({
           size={"middle"}
           icon={<CheckCircleOutlined />}
           disabled={!excelFileName}
+          style={{ cursor: "not-allowed" }}
         >
           {translations?.tab?.preview ?? "Preview"}
         </Button>
@@ -282,6 +311,12 @@ const ExcelImportModal = ({
                 </div>
               </Card>
             </Dragger>
+          ) : loading ? (
+            <div>
+              <p className="ant-upload-drag-icon">
+                <LoadingOutlined />
+              </p>
+            </div>
           ) : (
             <>
               <Card style={{ position: "relative" }}>
@@ -294,7 +329,6 @@ const ExcelImportModal = ({
                       <Text
                         style={{
                           fontSize: 15,
-                          color: "black",
                           display: "block",
                         }}
                       >
@@ -331,7 +365,7 @@ const ExcelImportModal = ({
                           onChange={handleSheetChange}
                         />
                       </>
-                    ) : (
+                    ) : loading ? null : (
                       <Alert
                         message={
                           translations?.alerts?.noSheet ?? "No Sheet Found!"
@@ -364,7 +398,7 @@ const ExcelImportModal = ({
                 </Tooltip>
               </Card>
 
-              {sheetNames?.length <= 0 && (
+              {sheetNames?.length <= 0 && !loading && (
                 <Alert
                   message={
                     translations?.alerts?.noRows ??
@@ -376,19 +410,42 @@ const ExcelImportModal = ({
                 />
               )}
 
-              {mappingError && (
+              {mappingError && !loading && (
                 <Alert
-                  message={
-                    fields?.map((data) => data?.label).join(", ") +
-                    " " +
-                    (fields?.length > 1 ? "are" : "is") +
-                    " mandatory."
-                  }
                   type="error"
-                  showIcon
                   closable
                   onClose={() => setMappingError(false)}
                   style={{ marginBlock: 10 }}
+                  message={
+                    <Text strong>
+                      {" "}
+                      {translations?.mappingAlertText?.heading ??
+                        "Not all columns mapped"}{" "}
+                    </Text>
+                  }
+                  description={
+                    <div style={{ margin: 0 }}>
+                      <p style={{ margin: 0 }}>
+                        {translations?.mappingAlertText?.message ??
+                          "There are required columns that are not mapped yet."}
+                      </p>
+                      <p style={{ margin: 0 }}>
+                        {translations?.mappingAlertText?.notMappedText + ": " ??
+                          "Columns not mapped: "}
+                        <Text strong>
+                          {fields
+                            ?.filter((field) =>
+                              field.validations?.some(
+                                (v) => v.rule === "required"
+                              )
+                            )
+                            ?.filter((field) => !columnMappings[field.key])
+                            ?.map((f) => f.label)
+                            .join(", ") || "None"}
+                        </Text>
+                      </p>
+                    </div>
+                  }
                 />
               )}
 
@@ -424,7 +481,6 @@ const ExcelImportModal = ({
                             style={{
                               width: 60,
                               textAlign: "center",
-                              background: "#fafafa",
                             }}
                           />
                           <Input

@@ -50,11 +50,23 @@ function App() {
       label: "Name",
       key: "name",
       alternateMatches: ["full name", "first name"],
+      validations: [
+        {
+          rule: "required",
+          errorMessage: "Name is required",
+        },
+      ],
     },
     {
       label: "Email",
       key: "email",
       alternateMatches: ["mail", "email address"],
+      validations: [
+        {
+          rule: "required",
+          errorMessage: "Email is required",
+        },
+      ],
     },
     {
       label: "Phone",
@@ -94,6 +106,11 @@ function App() {
               upload: "Upload",
               preview: "Preview",
             },
+            mappingAlertText: {
+              heading: "Not all columns mapped",
+              message: "There are required columns that are not mapped yet.",
+              notMappedText: "Columns not mapped",
+            },
             buttons: {
               cancel: "Cancel",
               import: "Import",
@@ -131,13 +148,12 @@ export default App;
 
 ### `<ExcelImporter />` Props
 
-| Prop           | Type                                  | Required | Description                           |
-| -------------- | ------------------------------------- | -------- | ------------------------------------- |
-| `isOpen`       | `boolean`                             | ✅       | Controls modal visibility             |
-| `onClose`      | `() => void`                          | ✅       | Callback when user closes modal       |
-| `onSubmit`     | `(data: object[]) => void \| Promise` | ✅       | Callback with imported/formatted data |
-| `fields`       | `Field[]`                             | ✅       | Required fields for mapping           |
-| `translations` | `Translations`                        | ❌       | i18n translation object for UI text   |
-| `modalWidth` | `number` | ❌ | Modal width in pixels |
-| `tableSize` | `"small" \| "middle" \| "large"` | ❌ | Table size variant (default: "middle") |
-
+| Prop           | Type                                  | Required | Description                            |
+| -------------- | ------------------------------------- | -------- | -------------------------------------- |
+| `isOpen`       | `boolean`                             | ✅       | Controls modal visibility              |
+| `onClose`      | `() => void`                          | ✅       | Callback when user closes modal        |
+| `onSubmit`     | `(data: object[]) => void \| Promise` | ✅       | Callback with imported/formatted data  |
+| `fields`       | `Field[]`                             | ✅       | Required fields for mapping            |
+| `translations` | `Translations`                        | ❌       | i18n translation object for UI text    |
+| `modalWidth`   | `number`                              | ❌       | Modal width in pixels                  |
+| `tableSize`    | `"small" \| "middle" \| "large"`      | ❌       | Table size variant (default: "middle") |
