@@ -7,32 +7,36 @@ import {
   Row,
   Space,
   Upload,
-  Image,
   Typography,
   Input,
   Select,
   Table,
   Col,
   Tag,
+  Tooltip,
+  Alert,
 } from "antd";
 import {
   CloseOutlined,
   UploadOutlined,
   RightOutlined,
   CheckCircleOutlined,
+  FileExcelOutlined,
 } from "@ant-design/icons";
 import * as XLSX from "xlsx";
-import { useTranslation } from "react-i18next";
 
 const { Dragger } = Upload;
 const { Text } = Typography;
 
 const ExcelImportModal = ({
-  isOpen,
+  open,
   onClose,
   onSubmit,
   fields = [],
   customFields = [],
+  translations,
+  modalWidth,
+  tableSize,
 }) => {
   const [excelFileName, setExcelFileName] = useState("");
   const [sheetNames, setSheetNames] = useState([]);
@@ -42,11 +46,11 @@ const ExcelImportModal = ({
   const [excelData, setExcelData] = useState([]);
   const [columnMappings, setColumnMappings] = useState({});
   const [convertedData, setConvertedData] = useState([]);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [mappingError, setMappingError] = useState(false);
 
   const [step, setStep] = useState(1);
   const [btnLoading, setBtnLoading] = useState(false);
-
-  const { t } = useTranslation();
 
   const handleFileUpload = (file) => {
     const reader = new FileReader();
@@ -66,6 +70,7 @@ const ExcelImportModal = ({
 
     reader.readAsBinaryString(file);
     setExcelFileName(file.name);
+    setHasUserInteracted(false);
     return false;
   };
 
@@ -77,6 +82,7 @@ const ExcelImportModal = ({
     setColumnMappings({});
     setConvertedData([]);
     setStep(1);
+    setHasUserInteracted(false);
   };
 
   const handleSheetChange = (index) => {
@@ -89,6 +95,7 @@ const ExcelImportModal = ({
     setExcelData(json);
     setColumnMappings({});
     setConvertedData([]);
+    setHasUserInteracted(false);
   };
 
   const generateConvertedData = useCallback(() => {
@@ -110,7 +117,7 @@ const ExcelImportModal = ({
 
   useEffect(() => {
     if (Object.keys(columnMappings)?.length) generateConvertedData();
-  }, [columnMappings]);
+  }, [columnMappings, generateConvertedData]);
 
   const allFields = [
     ...(fields?.map((f) => ({
@@ -126,7 +133,8 @@ const ExcelImportModal = ({
   ];
 
   useEffect(() => {
-    if (!excelData?.length || !allFields?.length) return;
+    if (!excelData?.length || !allFields?.length || hasUserInteracted) return;
+    if (Object.keys(columnMappings).length > 0) return;
 
     const excelColumns = Object.keys(excelData[0]);
     const initialMapping = {};
@@ -141,34 +149,24 @@ const ExcelImportModal = ({
       if (match) initialMapping[field.key] = match;
     });
 
-    if (
-      Object.keys(initialMapping).length &&
-      !Object.keys(columnMappings).length
-    ) {
+    if (Object.keys(initialMapping).length > 0) {
       setColumnMappings(initialMapping);
     }
-  }, [excelData, allFields]);
-
-  useEffect(() => {
-    if (!excelData?.length || !Object.keys(columnMappings).length) return;
-
-    const formatted = excelData.map((row, i) => {
-      const obj = { id: i + 1 };
-      Object.keys(columnMappings).forEach((fieldKey) => {
-        const excelColumn = columnMappings[fieldKey];
-        obj[fieldKey] = row[excelColumn];
-      });
-      return obj;
-    });
-
-    setConvertedData(formatted);
-  }, [excelData, columnMappings]);
+  }, [excelData, allFields, hasUserInteracted, columnMappings]);
 
   const handleSubmit = async () => {
     setBtnLoading(true);
     try {
       if (step === 1) {
+        if (!Object.keys(columnMappings).length) {
+          setMappingError(true);
+          setBtnLoading(false);
+          return;
+        }
+
+        setMappingError(false);
         setStep(2);
+        setBtnLoading(false);
         return;
       }
 
@@ -183,15 +181,16 @@ const ExcelImportModal = ({
     }
   };
 
+  const handleCancel = () => {
+    resetAll();
+    onClose();
+  };
+
   const modalFooter = [
-    <Button key="1" onClick={() => (step === 1 ? onClose() : setStep(1))}>
+    <Button key="1" onClick={() => (step === 1 ? handleCancel() : setStep(1))}>
       {step === 1
-        ? t("cancel") !== "cancel"
-          ? t("cancel")
-          : "Cancel"
-        : t("back") !== "back"
-        ? t("back")
-        : "Back"}
+        ? translations?.buttons?.cancel ?? "Cancel"
+        : translations?.buttons?.back ?? "Back"}
     </Button>,
     <Button
       key="2"
@@ -201,24 +200,24 @@ const ExcelImportModal = ({
       onClick={handleSubmit}
     >
       {step === 1
-        ? t("next") !== "next"
-          ? t("next")
-          : "Next"
-        : t("import") !== "import"
-        ? t("import")
-        : "Import"}
+        ? translations?.buttons?.next ?? "Next"
+        : translations?.buttons?.import ?? "Import"}
     </Button>,
   ];
 
   const handleColumnChange = (excelColumn, selectedField) => {
+    setHasUserInteracted(true);
+
     setColumnMappings((prev) => {
       const next = { ...prev };
 
-      Object.keys(next).forEach((f) => {
-        if (next[f] === excelColumn) delete next[f];
+      Object.keys(next).forEach((key) => {
+        if (next[key] === excelColumn) delete next[key];
       });
 
-      if (selectedField) next[selectedField] = excelColumn;
+      if (selectedField) {
+        next[selectedField] = excelColumn;
+      }
 
       return next;
     });
@@ -226,13 +225,9 @@ const ExcelImportModal = ({
 
   return (
     <Modal
-      open={isOpen}
-      width={800}
-      title={
-        t("import.excel") !== "import.excel"
-          ? t("import.excel")
-          : "Import Excel"
-      }
+      open={open}
+      width={modalWidth ?? 800}
+      title={translations?.title ?? "Upload Excel"}
       onCancel={() => {
         resetAll();
         onClose();
@@ -251,7 +246,7 @@ const ExcelImportModal = ({
           icon={<CheckCircleOutlined />}
           disabled={step === 2}
         >
-          {t("upload") !== "upload" ? t("upload") : "Upload"}
+          {translations?.tab?.upload ?? "Upload"}
         </Button>
         <RightOutlined />
         <Button
@@ -261,7 +256,7 @@ const ExcelImportModal = ({
           icon={<CheckCircleOutlined />}
           disabled={!excelFileName}
         >
-          {t("preview") !== "preview" ? t("preview") : "Preview"}
+          {translations?.tab?.preview ?? "Preview"}
         </Button>
       </Row>
 
@@ -282,93 +277,167 @@ const ExcelImportModal = ({
                     <UploadOutlined />
                   </p>
                   <p className="ant-upload-text">
-                    {t("upload.file") !== "upload.file"
-                      ? t("upload.file")
-                      : "Upload File"}
+                    {translations?.uploadFileText ?? "Upload File"}
                   </p>
                 </div>
               </Card>
             </Dragger>
           ) : (
             <>
-              <Card>
-                <Flex justify="space-between">
+              <Card style={{ position: "relative" }}>
+                <Flex justify="space-between" align="center">
                   <Space>
-                    <Image src="/excel.svg" preview={false} width={40} />
+                    <FileExcelOutlined
+                      style={{ fontSize: 30, color: "#107C41" }}
+                    />
                     <div>
                       <Text
-                        type="secondary"
-                        style={{ fontSize: "14px", display: "block" }}
+                        style={{
+                          fontSize: 15,
+                          color: "black",
+                          display: "block",
+                        }}
                       >
                         {excelFileName}
                       </Text>
-                      <Tag style={{ fontSize: "11px" }}>
-                        {sheetNames?.length}{" "}
-                        {t("sheets") !== "sheets" ? t("sheets") : "sheets"}
-                      </Tag>
+
+                      <Space wrap size={1}>
+                        <Tag color="blue">
+                          {sheetNames?.length}{" "}
+                          {translations?.sheetsText ?? "Sheets"}
+                        </Tag>
+
+                        <Tag color="green">
+                          {excelData?.length}{" "}
+                          {translations?.rowsFoundText ?? "Rows"}
+                        </Tag>
+                      </Space>
                     </div>
                   </Space>
 
-                  <Select
-                    value={currentSheetName}
-                    style={{ width: 200 }}
-                    options={sheetNames?.map((n, i) => ({
-                      label: n,
-                      value: i,
-                    }))}
-                    onChange={handleSheetChange}
-                  />
+                  <Flex vertical>
+                    {sheetNames?.length > 0 ? (
+                      <>
+                        <Text style={{ marginBottom: 2 }}>
+                          {translations?.sheetDropdownLabel ?? "Sheet"}
+                        </Text>
+                        <Select
+                          value={currentSheetName}
+                          style={{ width: 200 }}
+                          options={sheetNames?.map((n, i) => ({
+                            label: n,
+                            value: i,
+                          }))}
+                          onChange={handleSheetChange}
+                        />
+                      </>
+                    ) : (
+                      <Alert
+                        message={
+                          translations?.alerts?.noSheet ?? "No Sheet Found!"
+                        }
+                        type="error"
+                        showIcon
+                        style={{ marginTop: 16 }}
+                      />
+                    )}
+                  </Flex>
                 </Flex>
 
-                <Button
-                  type="primary"
-                  danger
-                  size="small"
-                  icon={<CloseOutlined />}
-                  style={{ position: "absolute", right: 10, top: 10 }}
-                  onClick={resetAll}
-                />
+                <Tooltip title={translations?.reupload ?? "Reupload"}>
+                  <Button
+                    type="primary"
+                    danger
+                    size="small"
+                    icon={<CloseOutlined />}
+                    style={{
+                      position: "absolute",
+                      top: -10,
+                      right: -10,
+                      borderRadius: "50%",
+                      width: 20,
+                      height: 20,
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                    }}
+                    onClick={resetAll}
+                  />
+                </Tooltip>
               </Card>
+
+              {sheetNames?.length <= 0 && (
+                <Alert
+                  message={
+                    translations?.alerts?.noRows ??
+                    "No rows found in this sheet!"
+                  }
+                  type="error"
+                  showIcon
+                  style={{ marginTop: 16 }}
+                />
+              )}
+
+              {mappingError && (
+                <Alert
+                  message={
+                    fields?.map((data) => data?.label).join(", ") +
+                    " " +
+                    (fields?.length > 1 ? "are" : "is") +
+                    " mandatory."
+                  }
+                  type="error"
+                  showIcon
+                  closable
+                  onClose={() => setMappingError(false)}
+                  style={{ marginBlock: 10 }}
+                />
+              )}
 
               {excelData?.length > 0 && (
                 <>
-                  <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
+                  <Row
+                    gutter={[16, 16]}
+                    style={{ marginTop: 20, paddingInline: 5 }}
+                  >
                     <Col span={12}>
                       <Text strong>
-                        {t("imported.columns") !== "imported.columns"
-                          ? t("imported.columns")
-                          : "Imported Columns"}
-                        <Tag>
+                        {translations?.columns?.tableColumn ?? "Table Columns"}
+                        <Tag style={{ marginLeft: 5 }}>
                           {Object.keys(excelData[0] || {})?.length}{" "}
-                          {t("columns") !== "columns"
-                            ? t("columns")
-                            : "Columns"}
+                          {translations?.columns?.columns ?? "Columns"}
                         </Tag>
                       </Text>
                     </Col>
                     <Col span={12}>
-                      <Text strong>
-                        {t("column.mapping") !== "column.mapping"
-                          ? t("column.mapping")
-                          : "Column Mapping"}
+                      <Text strong style={{ marginLeft: 20 }}>
+                        {translations?.columns?.mapField ?? "Mapping To"}
                       </Text>
                     </Col>
                   </Row>
 
-                  <div
-                    style={{ maxHeight: 250, overflow: "auto", marginTop: 10 }}
-                  >
-                    {Object.keys(excelData[0]).map((col) => (
-                      <Row key={col} style={{ marginBottom: 10 }}>
+                  {Object.keys(excelData[0])?.map((col, index) => (
+                    <Row key={col} style={{ marginBlock: 10 }}>
+                      <Col span={24}>
                         <Space.Compact style={{ width: "100%" }}>
-                          <Input readOnly value={col} />
+                          <Input
+                            readOnly
+                            value={index + 1}
+                            style={{
+                              width: 60,
+                              textAlign: "center",
+                              background: "#fafafa",
+                            }}
+                          />
+                          <Input
+                            readOnly
+                            value={col}
+                            style={{ borderRadius: 0 }}
+                          />
                           <Select
                             allowClear
                             style={{ width: "100%" }}
                             placeholder={
-                              t("select.field") !== "select.field"
-                                ? t("select.field")
-                                : "Select Field"
+                              translations?.dropdownPlaceholder?.selectField ??
+                              "Select Field"
                             }
                             value={Object.keys(columnMappings)?.find(
                               (f) => columnMappings[f] === col
@@ -390,9 +459,9 @@ const ExcelImportModal = ({
                               }))}
                           />
                         </Space.Compact>
-                      </Row>
-                    ))}
-                  </div>
+                      </Col>
+                    </Row>
+                  ))}
                 </>
               )}
             </>
@@ -400,20 +469,49 @@ const ExcelImportModal = ({
         </>
       )}
 
-      {step === 2 && (
-        <Table
-          rowKey="id"
-          scroll={{ y: 400 }}
-          dataSource={convertedData}
-          columns={[
-            { title: "Sr. No.", dataIndex: "id", width: 80 },
-            ...Object.keys(columnMappings).map((fieldKey) => {
-              const field = allFields.find((f) => f?.key === fieldKey);
-              return { title: field?.label || fieldKey, dataIndex: fieldKey };
-            }),
-          ]}
+      {step === 2 && Object.keys(columnMappings)?.length === 0 ? (
+        <Alert
+          message={
+            translations?.alerts?.noMappingFound ?? "No Column Mapping Found!"
+          }
+          type="error"
+          showIcon
+          style={{ marginBlock: 30 }}
         />
-      )}
+      ) : null}
+
+      {step === 2 && Object.keys(columnMappings)?.length > 0 ? (
+        <>
+          <Row gutter={[12, 12]} style={{ marginBottom: 10 }}>
+            <Col xs={12}>
+              <Text strong style={{ fontSize: 16 }}>
+                {translations?.title?.title ?? "Mapped Data"}
+              </Text>
+            </Col>
+          </Row>
+          <Table
+            rowKey="id"
+            scroll={{ y: 350 }}
+            dataSource={convertedData}
+            columns={[
+              {
+                title: translations?.table?.sn ?? "SN",
+                dataIndex: "id",
+                width: 80,
+              },
+              ...Object.keys(columnMappings).map((fieldKey) => {
+                const field = allFields.find((f) => f?.key === fieldKey);
+                return {
+                  title: field?.label || fieldKey,
+                  dataIndex: fieldKey,
+                  width: 150,
+                };
+              }),
+            ]}
+            size={tableSize ?? "middle"}
+          />
+        </>
+      ) : null}
     </Modal>
   );
 };

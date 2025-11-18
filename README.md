@@ -39,7 +39,7 @@ pnpm add antd-spreadsheet-import
 
 ```jsx
 import { useState } from "react";
-import ExcelImportModal from "antd-spreadsheet-import";
+import { ExcelImporter } from "antd-spreadsheet-import";
 import { Button } from "antd";
 
 function App() {
@@ -63,14 +63,6 @@ function App() {
     },
   ];
 
-  const customFields = [
-    {
-      label: "Company",
-      id: "company",
-      alternateMatches: ["organization", "business"],
-    },
-  ];
-
   const handleSubmit = async (contacts) => {
     console.log("Imported contacts:", contacts);
     // Send to your API or database
@@ -84,12 +76,48 @@ function App() {
       </Button>
 
       {open && (
-        <ExcelImportModal
+        <ExcelImporter
           isOpen={open}
           onClose={() => setOpen(false)}
           onSubmit={handleSubmit}
           fields={fields}
-          customFields={customFields}
+          modalWidth={800}
+          tableSize={"middle"}
+          translations={{
+            title: "Upload Excel",
+            uploadFileText: "Upload File",
+            reupload: "Reupload",
+            sheetDropdownLabel: "Sheet",
+            sheetsText: "Sheets",
+            rowsFoundText: "Rows",
+            tab: {
+              upload: "Upload",
+              preview: "Preview",
+            },
+            buttons: {
+              cancel: "Cancel",
+              import: "Import",
+              back: "Back",
+              next: "Next",
+            },
+            columns: {
+              tableColumn: "Table Columns",
+              mapField: "Mapping To",
+              columns: "Columns",
+            },
+            table: {
+              title: "Mapped Data",
+              sn: "SN",
+            },
+            dropdownPlaceholder: {
+              selectField: "Select Field",
+            },
+            alerts: {
+              noRows: "No rows found in this sheet",
+              noMappingFound: "No Column Mapping Found",
+              noSheet: "No Sheet Found",
+            },
+          }}
         />
       )}
     </>
@@ -101,12 +129,15 @@ export default App;
 
 ## 📚 API Documentation
 
-### `<ExcelImportModal />` Props
+### `<ExcelImporter />` Props
 
-| Prop | Type | Required | Description |
-|------|------|----------|-------------|
-| `isOpen` | `boolean` | ✅ | Controls modal visibility |
-| `onClose` | `() => void` | ✅ | Callback when user closes modal |
-| `onSubmit` | `(data: object[]) => void \| Promise` | ✅ | Callback with imported/formatted data |
-| `fields` | `Field[]` | ✅ | Required fields for mapping |
-| `customFields` | `CustomField[]` | ❌ | Additional custom fields (optional) |
+| Prop           | Type                                  | Required | Description                           |
+| -------------- | ------------------------------------- | -------- | ------------------------------------- |
+| `isOpen`       | `boolean`                             | ✅       | Controls modal visibility             |
+| `onClose`      | `() => void`                          | ✅       | Callback when user closes modal       |
+| `onSubmit`     | `(data: object[]) => void \| Promise` | ✅       | Callback with imported/formatted data |
+| `fields`       | `Field[]`                             | ✅       | Required fields for mapping           |
+| `translations` | `Translations`                        | ❌       | i18n translation object for UI text   |
+| `modalWidth` | `number` | ❌ | Modal width in pixels |
+| `tableSize` | `"small" \| "middle" \| "large"` | ❌ | Table size variant (default: "middle") |
+
