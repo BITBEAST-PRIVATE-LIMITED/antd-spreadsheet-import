@@ -66,7 +66,7 @@ function App() {
             mappingAlertText: {
               heading: "Not all columns mapped",
               message: "There are required columns that are not mapped yet.",
-              notMappedText: "Columns not mapped",
+              notMappedText: "Columns not mapped:",
             },
             buttons: {
               cancel: "Cancel",

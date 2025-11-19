@@ -23,7 +23,6 @@ import {
   CheckCircleOutlined,
   FileExcelOutlined,
   LoadingOutlined,
-  CloseCircleOutlined,
 } from "@ant-design/icons";
 import * as XLSX from "xlsx";
 
@@ -35,7 +34,6 @@ const ExcelImportModal = ({
   onClose,
   onSubmit,
   fields = [],
-  customFields = [],
   translations,
   modalWidth,
   tableSize,
@@ -136,11 +134,6 @@ const ExcelImportModal = ({
       key: f?.key,
       alternateMatches: f?.alternateMatches || [],
     })) || []),
-    ...(customFields?.map((c) => ({
-      label: c?.label,
-      key: c?.id,
-      alternateMatches: c?.alternateMatches || [],
-    })) || []),
   ];
 
   useEffect(() => {
@@ -213,7 +206,7 @@ const ExcelImportModal = ({
     <Button
       key="2"
       type="primary"
-      disabled={!excelFileName}
+      disabled={!excelFileName || sheetNames?.length <= 0}
       loading={btnLoading}
       onClick={handleSubmit}
     >
@@ -430,17 +423,17 @@ const ExcelImportModal = ({
                           "There are required columns that are not mapped yet."}
                       </p>
                       <p style={{ margin: 0 }}>
-                        {translations?.mappingAlertText?.notMappedText + ": " ??
-                          "Columns not mapped: "}
+                        {translations?.mappingAlertText?.notMappedText ??
+                          "Columns not mapped:"}{" "}
                         <Text strong>
                           {fields
                             ?.filter((field) =>
                               field.validations?.some(
-                                (v) => v.rule === "required"
+                                (v) => v?.rule === "required"
                               )
                             )
                             ?.filter((field) => !columnMappings[field.key])
-                            ?.map((f) => f.label)
+                            ?.map((f) => f?.label)
                             .join(", ") || "None"}
                         </Text>
                       </p>
@@ -541,7 +534,7 @@ const ExcelImportModal = ({
           <Row gutter={[12, 12]} style={{ marginBottom: 10 }}>
             <Col xs={12}>
               <Text strong style={{ fontSize: 16 }}>
-                {translations?.title?.title ?? "Mapped Data"}
+                {translations?.table?.title ?? "Mapped Data"}
               </Text>
             </Col>
           </Row>
