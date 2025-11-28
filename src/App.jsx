@@ -59,6 +59,7 @@ function App() {
             sheetDropdownLabel: "Sheet",
             sheetsText: "Sheets",
             rowsFoundText: "Rows",
+            uploadingText: "Uploading",
             tab: {
               upload: "Upload",
               preview: "Preview",
