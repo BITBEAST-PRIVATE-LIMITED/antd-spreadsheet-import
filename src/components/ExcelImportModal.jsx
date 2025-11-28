@@ -548,21 +548,6 @@ const ExcelImportModal = ({
             rowKey="id"
             scroll={{ y: 350 }}
             dataSource={convertedData}
-            // columns={[
-            //   {
-            //     title: translations?.table?.sn ?? "SN",
-            //     dataIndex: "id",
-            //     width: 80,
-            //   },
-            //   ...Object.keys(columnMappings).map((fieldKey) => {
-            //     const field = allFields.find((f) => f?.key === fieldKey);
-            //     return {
-            //       title: field?.label || fieldKey,
-            //       dataIndex: fieldKey,
-            //       width: 150,
-            //     };
-            //   }),
-            // ]}
             columns={[
               {
                 title: translations?.table?.sn ?? "SN",
@@ -570,10 +555,10 @@ const ExcelImportModal = ({
                 width: 80,
               },
               ...fields
-                .filter((f) => columnMappings[f.key])
-                .map((field) => ({
-                  title: field.label,
-                  dataIndex: field.key,
+                ?.filter((f) => columnMappings[f?.key])
+                ?.map((field) => ({
+                  title: field?.label,
+                  dataIndex: field?.key,
                   width: 150,
                 })),
             ]}
