@@ -67,7 +67,12 @@ const ExcelImportModal = ({
         setCurrentSheetName(firstSheet);
 
         const sheet = wb.Sheets[firstSheet];
-        const json = XLSX.utils.sheet_to_json(sheet);
+        const json = XLSX.utils.sheet_to_json(sheet, {
+          raw: false,
+          defval: "",
+          cellText: true,
+        });
+        setExcelData(json);
         setExcelData(json);
       } catch (error) {
         console.error(error);
@@ -99,7 +104,12 @@ const ExcelImportModal = ({
     setCurrentSheetName(name);
 
     const sheet = workbook.Sheets[name];
-    const json = XLSX.utils.sheet_to_json(sheet);
+    const json = XLSX.utils.sheet_to_json(sheet, {
+      raw: false,
+      defval: "",
+      cellText: true,
+    });
+    setExcelData(json);
 
     setExcelData(json);
     setColumnMappings({});
